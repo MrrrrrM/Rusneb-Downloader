@@ -9,6 +9,7 @@ class PageData:
         self.initial_page = page_number
 
         self.max_page_found = 0
+        self.processed_count = 0
         self.all_items: set[str] = set()
         self.download_queue: set[str] = set()
         self.processed_pages: set[int] = set()

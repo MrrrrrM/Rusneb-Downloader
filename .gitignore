@@ -1,4 +1,6 @@
+__pycache__
 .env
 .venv
 test.html
-__pycache__
+test.py
+*proxies*

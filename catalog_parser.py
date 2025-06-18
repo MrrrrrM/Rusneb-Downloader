@@ -1,10 +1,10 @@
 import asyncio
 import os
+import random
 import time
 import httpx
 
 from pathlib import Path
-from typing import Optional
 from bs4 import BeautifulSoup
 from client_manager import ClientManager
 from file_manager import FileManager
@@ -13,8 +13,6 @@ from page_data import PageData
 
 
 class AsyncCatalogParser:
-    """Асинхронный парсер каталога с динамическим распределением задач"""
-
     def __init__(
         self,
         catalog_id: str,
@@ -35,11 +33,9 @@ class AsyncCatalogParser:
 
         self.stop_event = asyncio.Event()
         self.start_time = time.time()
-        self.processed_count = 0
-        self.last_save_time = 0
+        self.last_save_time = 0.0
 
     async def run(self) -> list[str]:
-        """Запускает парсинг каталога в несколько асинхронных задач"""
         self.start_time = time.time()
 
         await self._load_progress()
@@ -70,7 +66,7 @@ class AsyncCatalogParser:
             await self.save_progress()
 
             total_time = time.time() - self.start_time
-            print(f"Парсинг завершен за {total_time:.2f} секунд")
+            print(f"Парсинг завершен за {total_time:.2f} секунд ✅")
 
             async with self.page_data.protected_access() as data:
                 print(f"Обработано {len(data.processed_pages)} страниц")
@@ -78,7 +74,7 @@ class AsyncCatalogParser:
                 return list(data.all_items)
 
         except Exception as e:
-            print(f"Ошибка при выполнении парсинга: {e}")
+            print(f"Ошибка при выполнении парсинга: {e} ❌")
             async with self.page_data.protected_access() as data:
                 data.has_error = True
             await self.save_progress()
@@ -87,7 +83,6 @@ class AsyncCatalogParser:
                 return list(data.all_items)
 
     async def worker(self, worker_id: int) -> None:
-        """Рабочая функция для асинхронного обработчика"""
         print(f"Запущен воркер {worker_id}")
 
         client = await self.client_manager.pop_client()
@@ -99,7 +94,9 @@ class AsyncCatalogParser:
                 if not tasks:
                     async with self.page_data.protected_access() as data:
                         if data.no_more_pages and not data.pending_tasks:
-                            print(f"Воркер {worker_id} завершается: задачи закончились")
+                            print(
+                                f"Воркер {worker_id} завершается: задачи закончились ⚠️"
+                            )
                             break
                         else:
                             await asyncio.sleep(0.5)
@@ -109,11 +106,11 @@ class AsyncCatalogParser:
                     if self.stop_event.is_set():
                         break
                     await self._process_page(task, client)
+                    await asyncio.sleep(random.uniform(0.5, 2))
 
     async def save_progress(self) -> None:
-        """Сохраняет текущий прогресс в файл"""
         current_time = time.time()
-        if current_time - self.last_save_time < 5:
+        if current_time - self.last_save_time < 10.0:
             return
 
         file_manager = FileManager.get_instance()
@@ -123,21 +120,21 @@ class AsyncCatalogParser:
             if os.path.exists(self.save_file):
                 try:
                     saved_data = file_manager.read_json(self.save_file)
+                    saved_data["timestamp"] = current_time
                     saved_data["max_page_found"] = data.max_page_found
                     saved_data["processed_pages"] = list(data.processed_pages)
                     saved_data["download_queue"].extend(data.download_queue)
-                    saved_data["timestamp"] = current_time
                     data.download_queue.clear()
                 except Exception as e:
                     print(f"Ошибка при чтении файла прогресса: {e}")
                     return
             else:
                 saved_data = {
+                    "timestamp": current_time,
                     "catalog_id": self.catalog_id,
                     "max_page_found": data.max_page_found,
                     "processed_pages": list(data.processed_pages),
                     "download_queue": list(data.download_queue),
-                    "timestamp": current_time,
                 }
                 data.download_queue.clear()
 
@@ -146,14 +143,13 @@ class AsyncCatalogParser:
 
                 print(
                     f"Прогресс сохранен: {len(data.all_items)} уникальных элементов, "
-                    f"{len(data.processed_pages)} страниц обработано"
+                    f"{len(data.processed_pages)} страниц обработано ❗"
                 )
             except Exception as e:
-                print(f"Ошибка при сохранении прогресса: {e}")
+                print(f"Ошибка при сохранении прогресса: {e} ❌")
                 return
 
     async def _load_progress(self) -> None:
-        """Загружает сохраненный прогресс, если он есть"""
         if not os.path.exists(self.save_file):
             return
 
@@ -177,10 +173,9 @@ class AsyncCatalogParser:
                     f"в очереди {len(data.pending_tasks)} страниц для дообработки"
                 )
         except Exception as e:
-            print(f"Ошибка при загрузке прогресса: {e}")
+            print(f"Ошибка при загрузке прогресса: {e} ❌")
 
     async def _get_next_tasks(self, worker_id: int, count: int) -> list[PageTask]:
-        """Получает следующие задачи для обработки"""
         tasks = []
 
         async with self.page_data.protected_access() as data:
@@ -206,15 +201,11 @@ class AsyncCatalogParser:
 
         return tasks
 
-    async def _process_page(
-        self, task: PageTask, client: httpx.AsyncClient
-    ) -> Optional[PageTask]:
-        """Обрабатывает страницу каталога"""
-
+    async def _process_page(self, task: PageTask, client: httpx.AsyncClient) -> None:
         async with self.page_data.protected_access() as data:
             if task.page_number in data.processed_pages:
                 task.processed = True
-                return task
+                return
 
         url = f"https://rusneb.ru/catalog/{task.catalog_id}/?volumes=page-{task.page_number}"
 
@@ -223,7 +214,7 @@ class AsyncCatalogParser:
         )
 
         try:
-            response = await client.get(url, timeout=30.0)
+            response = await client.get(url)
 
             if response.status_code == 200:
                 html_content = response.text
@@ -241,54 +232,53 @@ class AsyncCatalogParser:
                         if task.page_number > data.max_page_found:
                             data.max_page_found = task.page_number
 
+                        data.processed_pages.add(task.page_number)
+                        data.processed_count += 1
+                        processed_count = data.processed_count
+
                     task.processed = True
                     print(
-                        f"Страница {task.page_number}: найдено {len(items)} элементов, {len(new_items)} новых"
+                        f"Страница {task.page_number}: найдено {len(items)} элементов, {len(new_items)} новых ✅"
                     )
-                else:
-                    print(f"Страница {task.page_number}: не найдено элементов")
-                    async with self.page_data.protected_access() as data:
-                        if task.page_number > data.max_page_found:
-                            data.no_more_pages = True
-                            print(
-                                f"Похоже, достигнут конец каталога на странице {task.page_number-1}"
-                            )
-            else:
-                print(
-                    f"Ошибка при запросе страницы {task.page_number}: статус {response.status_code}"
-                )
-                task.attempt_count += 1
-                task.last_error = Exception(f"HTTP error {response.status_code}")
-                if task.attempt_count < self.max_retries:
-                    async with self.page_data.protected_access() as data:
-                        data.pending_tasks.append(task)
-                    return None
+
+                    if processed_count % 10 == 0:
+                        await self.save_progress()
+
+                    return
+
+                print(f"Страница {task.page_number}: не найдено элементов ⚠️")
+                async with self.page_data.protected_access() as data:
+                    if task.page_number > data.max_page_found:
+                        data.no_more_pages = True
+                        print(
+                            f"Похоже, достигнут конец каталога на странице {task.page_number-1} ⚠️"
+                        )
+                return
+
+            print(
+                f"Ошибка при запросе страницы {task.page_number}: статус {response.status_code} ⚠️"
+            )
+            task.attempt_count += 1
+            task.last_error = Exception(f"HTTP error {response.status_code}")
+            if task.attempt_count < self.max_retries:
+                async with self.page_data.protected_access() as data:
+                    data.pending_tasks.append(task)
+                return
         except Exception as e:
             if not e:
-                print(f"Тайм-аут при запросе страницы {task.page_number}")
-                return None
+                print(f"Таймаут при запросе страницы {task.page_number} ⚠️")
+                return
 
-            print(f"Исключение при обработке страницы {task.page_number}: {e}")
+            print(f"Исключение при обработке страницы {task.page_number}: {e} ❌")
             task.attempt_count += 1
             task.last_error = e
             if task.attempt_count < self.max_retries:
                 async with self.page_data.protected_access() as data:
                     data.pending_tasks.append(task)
-                return None
-
-        async with self.page_data.protected_access() as data:
-            data.processed_pages.add(task.page_number)
-            self.processed_count += 1
-            processed_count = self.processed_count
-
-        if processed_count % 10 == 0:
-            await self.save_progress()
-
-        return task
+                return
 
     @staticmethod
     def _parse_catalog_page(html_content: str) -> list[str]:
-        """Парсинг страницы каталога для извлечения идентификаторов элементов"""
         soup = BeautifulSoup(html_content, "html.parser")
         items = []
         for card in soup.select(".cards-results__item"):
@@ -302,15 +292,16 @@ class AsyncCatalogParser:
 
 
 if __name__ == "__main__":
-    parser = None
     try:
         catalog_id = "000200_000018_RU_NLR_DRGNLR_3107"
-        client_manager = ClientManager(proxy_file=Path(__file__).parent / "proxies.txt")
+        client_manager = ClientManager(
+            timeout=30.0, proxy_file=Path(__file__).parent / "proxies.txt"
+        )
 
         parser = AsyncCatalogParser(
             catalog_id=catalog_id,
             client_manager=client_manager,
-            num_workers=10,
+            num_workers=3,
             chunk_size=10,
         )
 
