@@ -1,30 +1,17 @@
 # https://rusneb.ru/local/tools/exalead/getFiles.php?book_id=000200_000018_RU_NLR_BIBL_A_012520083
 # https://rusneb.ru/catalog/000200_000018_RU_NLR_DRGNLR_3107/?volumes=page-1
 
-from typing import List, Set, Optional, Deque
-from bs4 import BeautifulSoup
 import asyncio
-import json
 import os
 import time
-from dataclasses import dataclass, field
-from collections import deque
 import httpx
+
+from typing import Optional
+from bs4 import BeautifulSoup
+from collections import deque
 from client_manager import ClientManager
 from file_manager import FileManager
-
-
-@dataclass
-class PageTask:
-    """Задача обработки страницы каталога"""
-
-    catalog_id: str
-    page_number: int
-    worker_id: Optional[int] = None
-    processed: bool = False
-    items: List[str] = field(default_factory=list)
-    attempt_count: int = 0
-    last_error: Optional[Exception] = None
+from page_task import PageTask
 
 
 class AsyncCatalogParser:
@@ -47,10 +34,10 @@ class AsyncCatalogParser:
         self.save_file = save_file or f"catalog_progress_{catalog_id}.json"
 
         self.max_page_found = 0
-        self.all_items: Set[str] = set()
-        self.download_queue: Set[str] = set()
-        self.processed_pages: Set[int] = set()
-        self.pending_tasks: Deque[PageTask] = deque()
+        self.all_items: set[str] = set()
+        self.download_queue: set[str] = set()
+        self.processed_pages: set[int] = set()
+        self.pending_tasks: deque[PageTask] = deque()
         self.no_more_pages = False
         self.has_error = False
 
@@ -63,7 +50,7 @@ class AsyncCatalogParser:
 
         self._load_progress()
 
-    async def run(self) -> List[str]:
+    async def run(self) -> list[str]:
         """Запускает парсинг каталога в несколько асинхронных задач"""
         self.start_time = time.time()
 
@@ -198,13 +185,15 @@ class AsyncCatalogParser:
         except Exception as e:
             print(f"Ошибка при загрузке прогресса: {e}")
 
-    async def _get_next_tasks(self, worker_id: int, count: int) -> List[PageTask]:
+    async def _get_next_tasks(self, worker_id: int, count: int) -> list[PageTask]:
         """Получает следующие задачи для обработки"""
         tasks = []
 
         async with self.lock:
             while len(tasks) < count and self.pending_tasks:
-                tasks.append(self.pending_tasks.popleft())
+                task = self.pending_tasks.popleft()
+                task.worker_id = worker_id
+                tasks.append(task)
 
             if len(tasks) < count and not self.no_more_pages:
                 start_page = self.max_page_found + 1
@@ -219,6 +208,7 @@ class AsyncCatalogParser:
                                 page_number=page,
                             )
                         )
+                self.max_page_found = end_page
 
         return tasks
 
@@ -299,7 +289,7 @@ class AsyncCatalogParser:
         return task
 
     @staticmethod
-    def _parse_catalog_page(html_content: str) -> List[str]:
+    def _parse_catalog_page(html_content: str) -> list[str]:
         """Парсинг страницы каталога для извлечения идентификаторов элементов"""
         soup = BeautifulSoup(html_content, "html.parser")
         items = []
@@ -321,7 +311,7 @@ if __name__ == "__main__":
         parser = AsyncCatalogParser(
             catalog_id=catalog_id,
             client_manager=client_manager,
-            num_workers=2,
+            num_workers=5,
             chunk_size=10,
         )
 
@@ -333,7 +323,9 @@ if __name__ == "__main__":
                 print(f"  {i}. {item}")
     except KeyboardInterrupt:
         parser.stop_event.set()
+        asyncio.run(parser.save_progress())
         print("\nПарсинг прерван. Программа завершена.")
     except Exception as e:
         parser.stop_event.set()
+        asyncio.run(parser.save_progress())
         print(f"Необработанное исключение: {e}")
