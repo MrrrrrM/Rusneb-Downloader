@@ -4,6 +4,7 @@ import random
 import time
 import httpx
 
+from pathlib import Path
 from bs4 import BeautifulSoup
 from client_manager import ClientManager
 from file_manager import FileManager
