@@ -298,6 +298,8 @@ if __name__ == "__main__":
             timeout=30.0, proxy_file=Path(__file__).parent / "proxies.txt"
         )
 
+        asyncio.run(client_manager.setup())
+
         parser = AsyncCatalogParser(
             catalog_id=catalog_id,
             client_manager=client_manager,
