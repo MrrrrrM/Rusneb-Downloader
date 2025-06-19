@@ -1,9 +1,10 @@
 import httpx
-from pathlib import Path
 import asyncio
+import logging
+import log_config
+from pathlib import Path
 from fake_useragent import FakeUserAgent
 from tqdm.asyncio import tqdm_asyncio as tqdm
-
 
 class ClientManager:
     def __init__(
@@ -11,7 +12,6 @@ class ClientManager:
         timeout: float = 10.0,
         retries: int = 3,
         proxy_file: Path = None,
-        use_socks5: bool = False,
         count_clients: int = 100,
     ):
         self.timeout = timeout
@@ -19,14 +19,11 @@ class ClientManager:
         self.clients = []
         self.lock = asyncio.Lock()
         self.proxy_file = proxy_file
-        self.use_socks5 = use_socks5
         self.count_clients = count_clients
 
     async def setup(self):
         """Asynchronously initialize clients."""
-        self.clients = await self._spawn_clients(
-            self.proxy_file, self.use_socks5, self.count_clients
-        )
+        self.clients = await self._spawn_clients(self.proxy_file, self.count_clients)
 
     async def pop_client(self) -> httpx.AsyncClient:
         async with self.lock:
@@ -41,7 +38,6 @@ class ClientManager:
     async def _spawn_clients(
         self,
         proxy_file: Path = None,
-        use_socks5: bool = False,
         count_clients: int = 100,
     ) -> list[httpx.AsyncClient]:
         fake_useragent = FakeUserAgent()
@@ -49,42 +45,63 @@ class ClientManager:
         http_timeout = httpx.Timeout(self.timeout)
 
         if not proxy_file or not proxy_file.exists():
-            return [
-                httpx.AsyncClient(
-                    headers={"User-Agent": fake_useragent.random},
-                    transport=http_transport,
-                    timeout=http_timeout,
-                )
-                for _ in range(count_clients)
-            ]
-
-        if use_socks5:
-            proxies = self._read_socks5_proxies(proxy_file)
-        else:
-            proxies = await self._read_http_proxies(proxy_file)
-
-        if not proxies:
-            print(
-                f"Не найдено рабочих прокси. Создаю {count_clients} клиентов без прокси"
+            logging.warning(
+                f"Прокси файл {proxy_file} не найден или не существует. Создаю {count_clients} клиентов без прокси"
             )
             return [
-                httpx.AsyncClient(
-                    headers={"User-Agent": fake_useragent.random},
-                    transport=http_transport,
-                    timeout=http_timeout,
+                self._generate_client(
+                    fake_useragent,
+                    http_transport,
+                    http_timeout,
                 )
                 for _ in range(count_clients)
             ]
 
-        print(f"Создаю {len(proxies)} клиентов с прокси")
+        proxies = await self._read_http_proxies(proxy_file)
+
+        if not proxies:
+            logging.warning(
+                f"В вашем файле {proxy_file} не найдено рабочих прокси. Создаю {count_clients} клиентов без прокси"
+            )
+            return [
+                self._generate_client(
+                    fake_useragent,
+                    http_transport,
+                    http_timeout,
+                )
+                for _ in range(count_clients)
+            ]
+
+        logging.warning(
+            f"Доступно {len(proxies)} прокси. Создаю {len(proxies)} клиентов с прокси"
+        )
         return [
-            httpx.AsyncClient(
-                headers={"User-Agent": fake_useragent.random},
-                transport=httpx.AsyncHTTPTransport(retries=self.retries, proxy=proxy),
-                timeout=http_timeout,
+            self._generate_client(
+                fake_useragent,
+                http_transport,
+                http_timeout,
+                self.retries,
+                proxy,
             )
             for proxy in proxies
         ]
+
+    @staticmethod
+    def _generate_client(
+        fake_useragent, http_transport, http_timeout, retries=None, proxy=None
+    ):
+        if proxy is not None:
+            logging.info(f"Создаем клиент с использованием прокси: {proxy}")
+            transport = httpx.AsyncHTTPTransport(retries=retries, proxy=proxy)
+        else:
+            logging.info(f"Создаем клиент без использования прокси")
+            transport = http_transport
+
+        return httpx.AsyncClient(
+            headers={"User-Agent": fake_useragent.random},
+            transport=transport,
+            timeout=http_timeout,
+        )
 
     @staticmethod
     async def _read_http_proxies(proxy_file: Path) -> list[httpx.Proxy]:
@@ -99,7 +116,7 @@ class ClientManager:
                 proxies.append(proxy)
                 tasks.append(ClientManager._check_http_proxy(proxy))
 
-        print(f"Проверка {len(proxies)} прокси серверов:")
+        logging.warning(f"Проверка {len(proxies)} прокси серверов:")
         results = await tqdm.gather(*tasks, desc="Проверка прокси")
 
         working_count = 0
@@ -108,21 +125,8 @@ class ClientManager:
                 working_count += 1
                 http_proxies.append(proxy)
 
-        print(f"Найдено рабочих прокси: {working_count} из {len(proxies)}")
+        logging.warning(f"Найдено рабочих прокси: {working_count} из {len(proxies)}")
         return http_proxies
-
-    @staticmethod
-    def _read_socks5_proxies(proxy_file: Path) -> list[httpx.Proxy]:
-        socks5_proxies = []
-
-        with proxy_file.open("r", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("10."):
-                    host = line.split(" ")[0]
-                    proxy = httpx.Proxy(url=f"socks5://{host}:1080")
-                    socks5_proxies.append(proxy)
-
-        return socks5_proxies
 
     @staticmethod
     async def _check_http_proxy(
@@ -160,7 +164,7 @@ async def main():
     await manager.setup()
 
     client = await manager.pop_client()
-    print("Client obtained:", client)
+    logging.info(f"Client obtained: {client}")
 
     await client.aclose()
 

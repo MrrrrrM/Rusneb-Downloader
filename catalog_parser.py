@@ -3,6 +3,8 @@ import os
 import random
 import time
 import httpx
+import logging
+import log_config
 
 from pathlib import Path
 from bs4 import BeautifulSoup
@@ -41,7 +43,7 @@ class AsyncCatalogParser:
         await self._load_progress()
 
         try:
-            print(
+            logging.warning(
                 f"Запуск парсинга каталога {self.catalog_id} с {self.num_workers} воркерами"
             )
 
@@ -66,15 +68,15 @@ class AsyncCatalogParser:
             await self.save_progress()
 
             total_time = time.time() - self.start_time
-            print(f"Парсинг завершен за {total_time:.2f} секунд ✅")
+            logging.warning(f"Парсинг завершен за {total_time:.2f} секунд ✅")
 
             async with self.page_data.protected_access() as data:
-                print(f"Обработано {len(data.processed_pages)} страниц")
-                print(f"Найдено {len(data.all_items)} элементов")
+                logging.info(f"Обработано {len(data.processed_pages)} страниц")
+                logging.info(f"Найдено {len(data.all_items)} элементов")
                 return list(data.all_items)
 
         except Exception as e:
-            print(f"Ошибка при выполнении парсинга: {e} ❌")
+            logging.error(f"Ошибка при выполнении парсинга: {e} ❌")
             async with self.page_data.protected_access() as data:
                 data.has_error = True
             await self.save_progress()
@@ -83,10 +85,9 @@ class AsyncCatalogParser:
                 return list(data.all_items)
 
     async def worker(self, worker_id: int) -> None:
-        print(f"Запущен воркер {worker_id}")
-
+        logging.info(f"Запущен воркер {worker_id}")
         client = await self.client_manager.pop_client()
-
+        
         async with client:
             while not self.stop_event.is_set():
                 tasks = await self._get_next_tasks(worker_id, self.chunk_size)
@@ -94,7 +95,7 @@ class AsyncCatalogParser:
                 if not tasks:
                     async with self.page_data.protected_access() as data:
                         if data.no_more_pages and not data.pending_tasks:
-                            print(
+                            logging.info(
                                 f"Воркер {worker_id} завершается: задачи закончились ⚠️"
                             )
                             break
@@ -126,7 +127,7 @@ class AsyncCatalogParser:
                     saved_data["download_queue"].extend(data.download_queue)
                     data.download_queue.clear()
                 except Exception as e:
-                    print(f"Ошибка при чтении файла прогресса: {e}")
+                    logging.error(f"Ошибка при чтении файла прогресса: {e}")
                     return
             else:
                 saved_data = {
@@ -141,12 +142,12 @@ class AsyncCatalogParser:
             try:
                 file_manager.write_json(self.save_file, saved_data)
 
-                print(
+                logging.info(
                     f"Прогресс сохранен: {len(data.all_items)} уникальных элементов, "
                     f"{len(data.processed_pages)} страниц обработано ❗"
                 )
             except Exception as e:
-                print(f"Ошибка при сохранении прогресса: {e} ❌")
+                logging.error(f"Ошибка при сохранении прогресса: {e} ❌")
                 return
 
     async def _load_progress(self) -> None:
@@ -168,12 +169,12 @@ class AsyncCatalogParser:
                             PageTask(catalog_id=self.catalog_id, page_number=page)
                         )
 
-                print(
+                logging.warning(
                     f"Загружен прогресс: обработано {len(data.processed_pages)} страниц, "
                     f"в очереди {len(data.pending_tasks)} страниц для дообработки"
                 )
         except Exception as e:
-            print(f"Ошибка при загрузке прогресса: {e} ❌")
+            logging.error(f"Ошибка при загрузке прогресса: {e} ❌")
 
     async def _get_next_tasks(self, worker_id: int, count: int) -> list[PageTask]:
         tasks = []
@@ -209,7 +210,7 @@ class AsyncCatalogParser:
 
         url = f"https://rusneb.ru/catalog/{task.catalog_id}/?volumes=page-{task.page_number}"
 
-        print(
+        logging.info(
             f"Воркер {task.worker_id} обрабатывает страницу {task.page_number}: {url}"
         )
 
@@ -237,7 +238,7 @@ class AsyncCatalogParser:
                         processed_count = data.processed_count
 
                     task.processed = True
-                    print(
+                    logging.info(
                         f"Страница {task.page_number}: найдено {len(items)} элементов, {len(new_items)} новых ✅"
                     )
 
@@ -246,16 +247,16 @@ class AsyncCatalogParser:
 
                     return
 
-                print(f"Страница {task.page_number}: не найдено элементов ⚠️")
+                logging.warning(f"Страница {task.page_number}: не найдено элементов ⚠️")
                 async with self.page_data.protected_access() as data:
                     if task.page_number > data.max_page_found:
                         data.no_more_pages = True
-                        print(
+                        logging.warning(
                             f"Похоже, достигнут конец каталога на странице {task.page_number-1} ⚠️"
                         )
                 return
 
-            print(
+            logging.warning(
                 f"Ошибка при запросе страницы {task.page_number}: статус {response.status_code} ⚠️"
             )
             task.attempt_count += 1
@@ -266,10 +267,10 @@ class AsyncCatalogParser:
                 return
         except Exception as e:
             if not e:
-                print(f"Таймаут при запросе страницы {task.page_number} ⚠️")
+                logging.error(f"Таймаут при запросе страницы {task.page_number} ⚠️")
                 return
 
-            print(f"Исключение при обработке страницы {task.page_number}: {e} ❌")
+            logging.error(f"Исключение при обработке страницы {task.page_number}: {e} ❌")
             task.attempt_count += 1
             task.last_error = e
             if task.attempt_count < self.max_retries:
@@ -310,16 +311,16 @@ if __name__ == "__main__":
         results = asyncio.run(parser.run())
 
         if results:
-            print("\nПримеры найденных элементов:")
+            logging.info("Примеры найденных элементов:")
             for i, item in enumerate(list(results)[:5], 1):
-                print(f"  {i}. {item}")
+                logging.info(f"  {i}. {item}")
     except KeyboardInterrupt:
         if parser:
             parser.stop_event.set()
             asyncio.run(parser.save_progress())
-        print("\nПарсинг прерван. Программа завершена.")
+        logging.warning("Парсинг прерван. Программа завершена.")
     except Exception as e:
         if parser:
             parser.stop_event.set()
             asyncio.run(parser.save_progress())
-        print(f"Необработанное исключение: {e}")
+        logging.error(f"Необработанное исключение: {e}")
