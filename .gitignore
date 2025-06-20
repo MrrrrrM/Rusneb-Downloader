@@ -4,5 +4,6 @@ __pycache__
 test.html
 test.py
 *proxies*
+result
 *.log
 *.json

@@ -152,9 +152,9 @@ class ClientManager:
         return False
 
 
-async def main():
+async def test():
     proxy_file = None
-    proxy_file = Path(__file__).parent / "proxies.txt"
+    # proxy_file = Path(__file__).parent / "proxies.txt"
 
     if proxy_file is None:
         manager = ClientManager()
@@ -165,9 +165,10 @@ async def main():
 
     client = await manager.pop_client()
     logging.info(f"Client obtained: {client}")
+    print("Client count:", len(manager.clients))
 
     await client.aclose()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(test())
