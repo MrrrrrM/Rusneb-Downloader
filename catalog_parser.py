@@ -266,7 +266,7 @@ class AsyncCatalogParser:
                     data.pending_tasks.append(task)
                 return
         except Exception as e:
-            if not e:
+            if isinstance(e, httpx.TimeoutException):
                 logging.error(f"Таймаут при запросе страницы {task.page_number} ⚠️")
                 return
 
