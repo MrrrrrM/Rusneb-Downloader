@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
         help="Chunk size for processing (default: 10)",
     )
     parser.add_argument(
-        "--catalog-workers",
+        "--parser-workers",
         type=int,
         default=3,
         help="Number of workers for catalog parsing (default: 3)",

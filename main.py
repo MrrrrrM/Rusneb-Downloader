@@ -28,7 +28,7 @@ async def main() -> None:
             request=request,
             client_manager=client_manager,
             page_data=page_data,
-            num_workers=args.catalog_workers,
+            num_workers=args.parser_workers,
             chunk_size=args.chunk_size,
         )
 
