@@ -5,3 +5,5 @@ test.html
 test.py
 *proxies*
 result
+*.log
+*.json
