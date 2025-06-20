@@ -1,6 +1,7 @@
 import httpx
-from pathlib import Path
 import asyncio
+
+from pathlib import Path
 from fake_useragent import FakeUserAgent
 from tqdm.asyncio import tqdm_asyncio as tqdm
 
@@ -148,9 +149,9 @@ class ClientManager:
         return False
 
 
-async def main():
+async def test():
     proxy_file = None
-    proxy_file = Path(__file__).parent / "proxies.txt"
+    # proxy_file = Path(__file__).parent / "proxies.txt"
 
     if proxy_file is None:
         manager = ClientManager()
@@ -161,9 +162,10 @@ async def main():
 
     client = await manager.pop_client()
     print("Client obtained:", client)
+    print("Client count:", len(manager.clients))
 
     await client.aclose()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(test())

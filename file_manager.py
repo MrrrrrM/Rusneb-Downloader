@@ -1,7 +1,8 @@
 import os
 import threading
 import json
-from typing import Any, Dict, Union
+
+from typing import Any
 from pathlib import Path
 
 
@@ -37,9 +38,7 @@ class FileManager:
             FileManager()
         return FileManager._instance
 
-    def read_file(
-        self, file_path: Union[str, Path], binary: bool = False
-    ) -> Union[str, bytes]:
+    def read_file(self, file_path: str | Path, binary: bool = False) -> str | bytes:
         """
         Read a file with thread safety.
 
@@ -64,8 +63,8 @@ class FileManager:
 
     def write_file(
         self,
-        file_path: Union[str, Path],
-        content: Union[str, bytes],
+        file_path: str | Path,
+        content: str | bytes,
         binary: bool = False,
     ) -> None:
         """
@@ -92,8 +91,8 @@ class FileManager:
 
     def append_file(
         self,
-        file_path: Union[str, Path],
-        content: Union[str, bytes],
+        file_path: str | Path,
+        content: str | bytes,
         binary: bool = False,
     ) -> None:
         """
@@ -118,7 +117,7 @@ class FileManager:
             except Exception as e:
                 raise IOError(f"Error appending to file {file_path}: {str(e)}")
 
-    def read_json(self, file_path: Union[str, Path]) -> Dict[str, Any]:
+    def read_json(self, file_path: str | Path) -> dict[str, Any]:
         """
         Read a JSON file with thread safety.
 
@@ -138,7 +137,7 @@ class FileManager:
                 raise IOError(f"Error reading JSON file {file_path}: {str(e)}")
 
     def write_json(
-        self, file_path: Union[str, Path], data: Dict[str, Any], indent: int = 4
+        self, file_path: str | Path, data: dict[str, Any], indent: int = 4
     ) -> None:
         """
         Write a dictionary to a JSON file with thread safety.
@@ -164,7 +163,7 @@ class FileManager:
         with self._global_lock:
             self._file_locks.clear()
 
-    def _get_file_lock(self, file_path: Union[str, Path]) -> threading.Lock:
+    def _get_file_lock(self, file_path: str | Path) -> threading.Lock:
         """
         Get a lock object for a specific file.
         Creates a new lock if one doesn't exist for the file.
