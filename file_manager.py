@@ -8,47 +8,53 @@ from pathlib import Path
 
 class FileManager:
     """
-    A singleton class for thread-safe file access operations.
-    Uses locks to prevent concurrent access issues when reading/writing files.
+    Синглтон класс для управления файлами с потокобезопасностью.
+    Позволяет читать, записывать и добавлять данные в файлы, а также работать с JSON.
     """
 
     _instance = None
     _lock = threading.Lock()
 
     def __new__(cls):
+        """Создает новый экземпляр класса, если он еще не создан."""
+
         with cls._lock:
-            if cls._instance is None:
+            if not cls._instance:
                 cls._instance = super(FileManager, cls).__new__(cls)
                 cls._instance._file_locks = {}
                 cls._instance._global_lock = threading.RLock()
             return cls._instance
 
     def __init__(self):
+        """Инициализация пропущена, так как используется паттерн Singleton."""
+
         pass
 
     @staticmethod
     def get_instance() -> "FileManager":
         """
-        Get the singleton instance of FileManager.
+        Получает экземпляр FileManager.
 
         Returns:
-            FileManager: The singleton FileManager instance.
+            FileManager: Синглтон экземпляр FileManager.
         """
-        if FileManager._instance is None:
+
+        if not FileManager._instance:
             FileManager()
         return FileManager._instance
 
     def read_file(self, file_path: str | Path, binary: bool = False) -> str | bytes:
         """
-        Read a file with thread safety.
+        Чтение файла с потокобезопасностью.
 
         Args:
-            file_path: Path to the file to read
-            binary: Whether to read in binary mode
+            file_path (str | Path): Путь к файлу для чтения.
+            binary (bool): Нужно ли читать в бинарном режиме.
 
         Returns:
-            The file contents as string or bytes
+            (str | bytes): Содержимое файла в виде строки или байтов.
         """
+
         file_path = Path(file_path)
 
         with self._get_file_lock(file_path):
@@ -59,7 +65,7 @@ class FileManager:
                 with open(file_path, mode=mode, encoding=encoding) as f:
                     return f.read()
             except Exception as e:
-                raise IOError(f"Error reading file {file_path}: {str(e)}")
+                raise IOError(f"Ошибка чтения файла {file_path}: {str(e)}")
 
     def write_file(
         self,
@@ -68,15 +74,15 @@ class FileManager:
         binary: bool = False,
     ) -> None:
         """
-        Write to a file with thread safety.
+        Запись в файл с потокобезопасностью.
 
         Args:
-            file_path: Path to the file to write
-            content: Content to write
-            binary: Whether to write in binary mode
+            file_path (str | Path): Путь к файлу для записи.
+            content (str | bytes): Содержимое для записи.
+            binary (bool): Нужно ли записывать в бинарном режиме.
         """
-        file_path = Path(file_path)
 
+        file_path = Path(file_path)
         os.makedirs(file_path.parent, exist_ok=True)
 
         with self._get_file_lock(file_path):
@@ -87,7 +93,7 @@ class FileManager:
                 with open(file_path, mode=mode, encoding=encoding) as f:
                     f.write(content)
             except Exception as e:
-                raise IOError(f"Error writing to file {file_path}: {str(e)}")
+                raise IOError(f"Ошибка записи в файл {file_path}: {str(e)}")
 
     def append_file(
         self,
@@ -96,15 +102,15 @@ class FileManager:
         binary: bool = False,
     ) -> None:
         """
-        Append to a file with thread safety.
+        Добавление в файл с потокобезопасностью.
 
         Args:
-            file_path: Path to the file to append to
-            content: Content to append
-            binary: Whether to append in binary mode
+            file_path (str | Path): Путь к файлу для добавления.
+            content (str | bytes): Содержимое для добавления.
+            binary (bool): Нужно ли добавлять в бинарном режиме.
         """
-        file_path = Path(file_path)
 
+        file_path = Path(file_path)
         os.makedirs(file_path.parent, exist_ok=True)
 
         with self._get_file_lock(file_path):
@@ -115,18 +121,19 @@ class FileManager:
                 with open(file_path, mode=mode, encoding=encoding) as f:
                     f.write(content)
             except Exception as e:
-                raise IOError(f"Error appending to file {file_path}: {str(e)}")
+                raise IOError(f"Ошибка добавления в файл {file_path}: {str(e)}")
 
     def read_json(self, file_path: str | Path) -> dict[str, Any]:
         """
-        Read a JSON file with thread safety.
+        Чтение JSON файла с потокобезопасностью.
 
         Args:
-            file_path: Path to the JSON file
+            file_path (str | Path): Путь к JSON файлу
 
         Returns:
-            Dict containing parsed JSON data
+            dict ([str, Any]): Данные из JSON файла
         """
+
         file_path = Path(file_path)
 
         with self._get_file_lock(file_path):
@@ -134,21 +141,21 @@ class FileManager:
                 with open(file_path, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
-                raise IOError(f"Error reading JSON file {file_path}: {str(e)}")
+                raise IOError(f"Ошибка чтения JSON файла {file_path}: {str(e)}")
 
     def write_json(
         self, file_path: str | Path, data: dict[str, Any], indent: int = 4
     ) -> None:
         """
-        Write a dictionary to a JSON file with thread safety.
+        Запись словаря в JSON файл с потокобезопасностью.
 
         Args:
-            file_path: Path to the file to write
-            data: Dictionary to serialize as JSON
-            indent: JSON indentation level
+            file_path (str | Path): Путь к файлу для записи
+            data (dict[str, Any]): Словарь для сериализации в JSON
+            indent (int): Уровень отступа для JSON
         """
-        file_path = Path(file_path)
 
+        file_path = Path(file_path)
         os.makedirs(file_path.parent, exist_ok=True)
 
         with self._get_file_lock(file_path):
@@ -156,24 +163,20 @@ class FileManager:
                 with open(file_path, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=indent, ensure_ascii=False)
             except Exception as e:
-                raise IOError(f"Error writing JSON file {file_path}: {str(e)}")
-
-    def clear_locks(self):
-        """Clear all file locks that are no longer needed"""
-        with self._global_lock:
-            self._file_locks.clear()
+                raise IOError(f"Ошибка записи в JSON файл {file_path}: {str(e)}")
 
     def _get_file_lock(self, file_path: str | Path) -> threading.Lock:
         """
-        Get a lock object for a specific file.
-        Creates a new lock if one doesn't exist for the file.
+        Получение объекта блокировки для конкретного файла.
+        Создает новую блокировку, если она еще не существует для файла.
 
         Args:
-            file_path: Path to the file
+            file_path (str | Path): Путь к файлу
 
         Returns:
-            threading.Lock: The lock object for the specified file
+            threading.Lock: Объект блокировки для указанного файла
         """
+
         file_path_str = str(file_path)
 
         with self._global_lock:
