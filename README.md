@@ -1,6 +1,6 @@
 # Rusneb-Downloader
 
-Позволяет парсить и скачивать книги, статьи, газеты по айди либо поисковым запросом в ресурсе [Национальной электронной библиотеке](https://rusneb.ru/).
+Позволяет парсить и скачивать книги, статьи, газеты по айди либо поисковым запросом в ресурсе [Национальной Электронной Библиотеки](https://rusneb.ru/).
 Поддерживает асинхронность и использование прокси. Прогресс парсинга сохраняется в директории `result`. Логи хранятся в директории `logs`.
 
 Настройка и запуск проекта
@@ -15,7 +15,9 @@ python -u ./main.py --help
 Аргументы командной строки
 
 ```bash
-usage: main.py [-h] --query QUERY [--search] [--proxy-file PROXY_FILE] [--timeout TIMEOUT] [--chunk-size CHUNK_SIZE] [--parser-workers PARSER_WORKERS] [--download-workers DOWNLOAD_WORKERS] [--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
+usage: main.py [-h] --query QUERY [--search] [--proxy-file PROXY_FILE] [--timeout TIMEOUT]
+[--chunk-size CHUNK_SIZE] [--parser-workers PARSER_WORKERS] [--download-workers DOWNLOAD_WORKERS]
+[--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
 
 Rusneb парсер и загрузчик документов
 
