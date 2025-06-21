@@ -1,9 +1,8 @@
 __pycache__
 .env
 .venv
-test.html
-test.py
 *proxies*
 result
-*.log
-*.json
+logs
+test.html
+test.py
