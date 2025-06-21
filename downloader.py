@@ -3,13 +3,15 @@ import httpx
 import asyncio
 
 from pathlib import Path
-
 from client_manager import ClientManager
 from page_data import PageData
 from parse_request import ParseRequest
+from log_manager import log_manager
 
 
 class Downloader:
+    """Класс для загрузки документов с сайта Rusneb."""
+
     DOWNLOAD_URL = f"https://rusneb.ru/local/tools/exalead/getFiles.php"
 
     def __init__(
@@ -19,12 +21,23 @@ class Downloader:
         page_data: PageData,
         num_workers: int = 10,
     ):
+        """
+        Инициализация класса Downloader.
+
+        Args:
+            request (ParseRequest): Запрос для загрузки документов.
+            client_manager (ClientManager): Менеджер HTTP-клиентов.
+            page_data (PageData): Данные страницы с информацией о загрузке.
+            num_workers (int): Количество воркеров для загрузки.
+        """
+
         self.request = request
         self.client_manager = client_manager
         self.page_data = page_data
         self.num_workers = num_workers
 
         self.stop_event = asyncio.Event()
+        self.logger = log_manager.get_logger(__name__)
 
         self.save_directory = (
             Path(__file__).parent / "result" / request.query / "downloads"
@@ -32,6 +45,8 @@ class Downloader:
         self.save_directory.mkdir(parents=True, exist_ok=True)
 
     async def run(self) -> None:
+        """Запуск загрузчика документов с использованием асинхронных воркеров."""
+
         workers = [asyncio.create_task(self.worker(i)) for i in range(self.num_workers)]
         pending = set(workers)
 
@@ -40,13 +55,13 @@ class Downloader:
                 workers, return_when=asyncio.FIRST_COMPLETED
             )
         except asyncio.CancelledError:
-            print("Downloader cancelled by user, stopping workers...")
+            self.logger.warning("Загрузка была отменена пользователем")
         except Exception as e:
-            print(f"Error occurred in workers: {e}")
+            self.logger.exception(f"Вызвано исключение в воркерах: {e}", exc_info=True)
         finally:
             if not self.stop_event.is_set():
                 self.stop_event.set()
-                print("Ожидание завершения всех воркеров...")
+                self.logger.info("Ожидание завершения всех воркеров...")
 
             for worker in pending:
                 if not worker.done():
@@ -55,7 +70,9 @@ class Downloader:
             await asyncio.gather(*pending, return_exceptions=True)
 
     async def worker(self, worker_id: int) -> None:
-        print(f"Worker {worker_id} started.")
+        """Асинхронный воркер для загрузки документов."""
+
+        self.logger.info(f"Воркер {worker_id} запущен для загрузки документов")
 
         client = await self.client_manager.pop_client()
 
@@ -66,7 +83,9 @@ class Downloader:
                 try:
                     async with self.page_data.protected_access() as data:
                         if not data.download_queue:
-                            print("Download queue is empty, waiting for updates...")
+                            self.logger.info(
+                                "Очередь загрузки пуста, ожидание обновлений..."
+                            )
                             await asyncio.sleep(10)
                             continue
                         file_id = data.download_queue.popleft()
@@ -74,37 +93,60 @@ class Downloader:
                             continue
                     success = await self._download_file(client, file_id)
                 except asyncio.CancelledError:
-                    print(f"Worker {worker_id} cancelled.")
+                    self.logger.warning(f"Воркер {worker_id} отменен")
                 except Exception as e:
-                    print(f"Error in worker {worker_id} for file {file_id}: {e}")
+                    self.logger.exception(
+                        f"Ошибка в воркере {worker_id} для файла {file_id}: {e}",
+                        exc_info=True,
+                    )
                 finally:
-                    if file_id is not None:
+                    if file_id:
                         async with self.page_data.protected_access() as data:
                             if success:
                                 data.downloaded.add(file_id)
+                                self.logger.info(f"Файл {file_id} успешно загружен")
                             else:
-                                print(
-                                    f"Failed to download {file_id}, re-adding to queue."
+                                self.logger.warning(
+                                    f"Не удалось загрузить {file_id}, повторное добавление в очередь"
                                 )
                                 data.download_queue.append(file_id)
-                await asyncio.sleep(random.uniform(1, 3))
+                    await asyncio.sleep(random.uniform(1, 3))
 
     async def _download_file(self, client: httpx.AsyncClient, file_id: str) -> bool:
-        print(f"Downloading file {file_id}...")
+        """
+        Загрузка файла по идентификатору.
+
+        Args:
+            client (httpx.AsyncClient): Асинхронный HTTP-клиент.
+            file_id (str): Идентификатор файла для загрузки.
+
+        Returns:
+            bool: True, если загрузка прошла успешно, иначе False.
+        """
+
+        self.logger.info(f"Загрузка файла {file_id}")
 
         params = {"book_id": file_id, "doc_type": "pdf"}
 
         try:
             response = await client.get(self.DOWNLOAD_URL, params=params)
         except Exception as e:
-            print(f"Request error for {file_id}: {e}")
+            self.logger.exception(
+                f"Вызвано исключение для {file_id}: {e}", exc_info=True
+            )
             return False
 
         if response.status_code != 200:
+            self.logger.error(
+                f"Ошибка загрузки файла {file_id}: статус {response.status_code}"
+            )
             return False
 
         content_type = response.headers.get("Content-Type")
         if content_type != "application/pdf":
+            self.logger.error(
+                f"Неверный тип содержимого для {file_id}: {content_type}, ожидается application/pdf"
+            )
             return False
 
         filename = (
