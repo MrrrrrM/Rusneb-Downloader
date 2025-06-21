@@ -21,7 +21,7 @@ async def main() -> None:
         logger.error(f"Ошибка парсинга аргументов: {e}")
         return
 
-    logger.setLevel(args.log_level.upper())
+    log_manager.set_level(args.log_level.upper())
 
     try:
         logger.info("Начало работы Rusneb парсера и загрузчика документов")
@@ -60,7 +60,7 @@ async def main() -> None:
             num_workers=args.download_workers,
         )
 
-        logger.info(f"Запуск задач парсинга и загрузки...")
+        logger.info(f"Запуск задач парсинга и загрузки")
         tasks = [catalog_parser.run(), downloader.run()]
         await asyncio.gather(*tasks, return_exceptions=True)
     except asyncio.CancelledError:
