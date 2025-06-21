@@ -3,46 +3,55 @@ import sys
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Rusneb Catalog Parser and Downloader")
+    """Парсинг аргументов командной строки для Rusneb парсера и загрузчика документов."""
+
+    parser = argparse.ArgumentParser(description="Rusneb парсер и загрузчик документов")
     parser.add_argument(
         "--query",
         type=str,
         required=True,
-        help="Search query or catalog identifier (e.g., '000200_000018_RU_NLR_DRGNLR_3107')",
+        help="Поисковый запрос или идентификатор каталога для обработки",
     )
     parser.add_argument(
         "--search",
         action="store_true",
-        help="Use this flag if the query is a search term instead of a catalog identifier",
+        help="Используйте этот флаг, если запрос является поисковым термином, а не идентификатором каталога",
     )
     parser.add_argument(
         "--proxy-file",
         type=str,
-        help="Path to the file containing proxy addresses (one per line)",
+        help="Путь к файлу, содержащему адреса прокси (по одному на строку)",
     )
     parser.add_argument(
         "--timeout",
         type=float,
         default=30.0,
-        help="Timeout for HTTP requests in seconds (default: 30.0)",
+        help="Таймаут для HTTP-запросов в секундах (по умолчанию: 30.0)",
     )
     parser.add_argument(
         "--chunk-size",
         type=int,
         default=10,
-        help="Chunk size for processing (default: 10)",
+        help="Размер чанка для обработки (по умолчанию: 10)",
     )
     parser.add_argument(
         "--parser-workers",
         type=int,
         default=3,
-        help="Number of workers for catalog parsing (default: 3)",
+        help="Количество воркеров для парсинга каталога (по умолчанию: 3)",
     )
     parser.add_argument(
         "--download-workers",
         type=int,
         default=1,
-        help="Number of workers for downloading files (default: 1)",
+        help="Количество воркеров для загрузки файлов (по умолчанию: 1)",
+    )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Установить уровень логирования (по умолчанию: INFO)",
     )
     if len(sys.argv) == 1:
         parser.print_help()
