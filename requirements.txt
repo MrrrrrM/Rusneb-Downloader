@@ -1,5 +1,4 @@
 httpx
 beautifulsoup4
-socksio
 fake-useragent
 tqdm
