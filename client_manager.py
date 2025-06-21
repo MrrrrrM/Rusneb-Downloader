@@ -1,5 +1,6 @@
 import httpx
 import asyncio
+
 from pathlib import Path
 from fake_useragent import FakeUserAgent
 from tqdm.asyncio import tqdm_asyncio as tqdm
