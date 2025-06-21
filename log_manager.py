@@ -168,47 +168,23 @@ class LogManager:
 
         if name and name in self._loggers:
             logger = self._loggers[name]
-            if handler_type is None:
+            if not handler_type:
                 logger.setLevel(level)
             else:
                 self._set_handler_level(logger, level, handler_type)
             return
-
-        if name is None:
-            if handler_type is None or handler_type == "both":
+        else:
+            if not handler_type or handler_type == "both":
                 self.level = level
-            if handler_type == "file" or handler_type is None:
+            if not handler_type or handler_type == "file":
                 self.file_level = level
-            if handler_type == "console" or handler_type is None:
+            if not handler_type or handler_type == "console":
                 self.console_level = level
 
             for logger_name, logger in self._loggers.items():
-                if handler_type is None:
+                if not handler_type:
                     logger.setLevel(level)
                 self._set_handler_level(logger, level, handler_type)
-
-    def log_http_request(
-        self,
-        method: str,
-        url: str,
-        status_code: int | None = None,
-        logger: logging.Logger | None = None,
-    ) -> None:
-        """
-        Логирует HTTP-запрос с форматированием.
-
-        Args:
-            method (str): HTTP метод.
-            url (str): URL запроса.
-            status_code (int | None): Код статуса ответа.
-            logger (logging.Logger | None): Логгер для записи.
-        """
-
-        if logger is None:
-            logger = self.root_logger
-
-        status_text = f" → {status_code}" if status_code else ""
-        logger.info(f"HTTP {method} {url}{status_text}")
 
     def _set_handler_level(
         self, logger: logging.Logger, level: int, handler_type: str | None = None
@@ -231,7 +207,7 @@ class LogManager:
                 and not isinstance(handler, RotatingFileHandler)
             ):
                 handler.setLevel(level)
-            elif handler_type is None:
+            elif not handler_type:
                 handler.setLevel(level)
 
     def _cleanup_handlers(self) -> None:
