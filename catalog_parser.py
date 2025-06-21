@@ -208,7 +208,7 @@ class CatalogParser:
             link = card.select_one("a.cards-results__link")
             if link:
                 href = link.get("href", "")
-                if href is not None and "/catalog/" in href:
+                if href and "/catalog/" in href:
                     href = href.split("/catalog/")[1]
                     items.append(href)
         return items
@@ -221,7 +221,7 @@ class CatalogParser:
             link = card.select_one("a.search-list__item_link")
             if link:
                 href = link.get("href", "")
-                if href is not None and "/catalog/" in href:
+                if href and "/catalog/" in href:
                     href = href.split("/catalog/")[1].split("/")[0]
                     items.append(href)
         return items
