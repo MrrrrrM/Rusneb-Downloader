@@ -40,7 +40,10 @@ class ClientManager:
     async def setup(self) -> None:
         """Инициализация клиентов."""
 
-        self.clients = await self._spawn_clients()
+        try:
+            self.clients = await self._spawn_clients()
+        except asyncio.CancelledError:
+            self.logger.warning("Инициализация клиентов была отменена")
 
     async def pop_client(self) -> httpx.AsyncClient:
         """
@@ -136,12 +139,11 @@ class ClientManager:
             httpx.AsyncClient: Сгенерированный HTTP-клиент.
         """
 
-        if proxy is not None:
+        if proxy:
             transport = httpx.AsyncHTTPTransport(retries=retries, proxy=proxy)
             self.logger.debug(f"Создан клиент с использованием прокси: {proxy}")
         else:
             transport = http_transport
-            self.logger.debug(f"Создан клиент без использования прокси")
 
         return httpx.AsyncClient(
             headers={"User-Agent": fake_useragent.random},
@@ -212,9 +214,6 @@ class ClientManager:
         async with client:
             try:
                 response = await client.get(test_url)
-                log_manager.log_http_request(
-                    "GET", test_url, response.status_code, self.logger
-                )
                 self.logger.debug(
                     f"Прокси {proxy.url} вернул статус {response.status_code}"
                 )
@@ -228,11 +227,7 @@ async def test() -> None:
     proxy_file = None
     # proxy_file = Path(__file__).parent / "proxies.txt"
 
-    if proxy_file is None:
-        manager = ClientManager()
-    else:
-        manager = ClientManager(proxy_file=proxy_file)
-
+    manager = ClientManager(proxy_file=proxy_file)
     await manager.setup()
 
     client = await manager.pop_client()
