@@ -182,5 +182,4 @@ class FileManager:
         with self._global_lock:
             if file_path_str not in self._file_locks:
                 self._file_locks[file_path_str] = threading.RLock()
-
             return self._file_locks[file_path_str]
