@@ -15,6 +15,8 @@ class LogManager:
     Предоставляет единую точку доступа к логгерам и их конфигурации.
     """
 
+    DEFAULT_LOGS_FILE = "main.log"
+
     class ColoredFormatter(logging.Formatter):
         """
         Кастомный форматтер для цветного вывода в консоль.
@@ -68,7 +70,7 @@ class LogManager:
     def __init__(
         self,
         logs_dir: str = "logs",
-        log_filename: str = "app.log",
+        log_filename: str = DEFAULT_LOGS_FILE,
         max_bytes: int = 10 * 1024 * 1024,
         backup_count: int = 5,
         level: int = logging.INFO,
@@ -92,7 +94,7 @@ class LogManager:
 
         self.logs_dir = Path(logs_dir)
         self.logs_dir.mkdir(exist_ok=True)
-        self.log_file = self.logs_dir / log_filename
+        self.log_file = (self.logs_dir / log_filename).resolve()
 
         self.max_bytes = max_bytes
         self.backup_count = backup_count
@@ -110,13 +112,16 @@ class LogManager:
 
         self.root_logger = self.get_logger()
 
-    def get_logger(self, name: str | None = None) -> logging.Logger:
+    def get_logger(
+        self, name: str | None = None, filename: str | None = None
+    ) -> logging.Logger:
         """
         Получает логгер с настроенными обработчиками для заданного модуля.
         Если имя не указано, возвращается корневой логгер.
 
         Args:
             name (str | None): Имя логгера.
+            filename (str | None): Имя файла для логирования.
 
         Returns:
             logging.Logger: Настроенный логгер.
@@ -126,6 +131,9 @@ class LogManager:
         if cache_key in self._loggers:
             return self._loggers[cache_key]
 
+        self.log_file = (
+            self.logs_dir / (filename if filename else self.DEFAULT_LOGS_FILE)
+        ).resolve()
         logger = logging.getLogger(name)
         logger.propagate = False
         logger.handlers = []
