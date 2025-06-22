@@ -29,9 +29,7 @@ class ClientManager:
 
         self.timeout = timeout
         self.retries = retries
-        self.proxy_file = (
-            Path(proxy_file) if isinstance(proxy_file, str) else proxy_file
-        )
+        self.proxy_file = Path(proxy_file)
         self.count_clients = count_clients
 
         self.clients = []
