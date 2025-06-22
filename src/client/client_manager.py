@@ -4,7 +4,8 @@ import asyncio
 from pathlib import Path
 from fake_useragent import FakeUserAgent
 from tqdm.asyncio import tqdm_asyncio as tqdm
-from log_manager import log_manager
+
+from src.utils.log_manager import log_manager
 
 
 class ClientManager:

@@ -2,13 +2,14 @@ import asyncio
 import os
 import time
 
-from pathlib import Path
 from collections import deque
 from contextlib import asynccontextmanager
-from file_manager import FileManager
-from page_task import PageTask
-from parse_request import ParseRequest
-from log_manager import log_manager
+
+from src.config.config import Config
+from src.models.parse_request import ParseRequest
+from src.models.page_task import PageTask
+from src.utils.file_manager import FileManager
+from src.utils.log_manager import log_manager
 
 
 class PageData:
@@ -23,7 +24,7 @@ class PageData:
         """
 
         self.request = request
-        self.save_file = Path(__file__).parent / "result" / request.query
+        self.save_file = Config.RESULT_DIR / request.query
         self.save_file.mkdir(parents=True, exist_ok=True)
         self.save_file /= f"catalog_progress_{request.query}.json"
 

@@ -5,11 +5,12 @@ import httpx
 
 from bs4 import BeautifulSoup
 
-from client_manager import ClientManager
-from page_task import PageTask
-from page_data import PageData
-from parse_request import ParseRequest
-from log_manager import log_manager
+from src.config.config import Config
+from src.models.parse_request import ParseRequest
+from src.models.page_data import PageData
+from src.models.page_task import PageTask
+from src.client.client_manager import ClientManager
+from src.utils.log_manager import log_manager
 
 
 class CatalogParser:
@@ -20,9 +21,9 @@ class CatalogParser:
         request: ParseRequest,
         client_manager: ClientManager,
         page_data: PageData,
-        num_workers: int = 5,
-        chunk_size: int = 10,
-        max_retries: int = 3,
+        num_workers: int = Config.DEFAULT_PARSER_WORKERS,
+        chunk_size: int = Config.DEFAULT_PARSER_CHUNK_SIZE,
+        max_retries: int = Config.DEFAULT_PARSER_RETRIES,
     ):
         """
         Инициализация парсера каталога.
@@ -332,6 +333,7 @@ async def test() -> None:
             page_data=page_data,
             num_workers=3,
             chunk_size=10,
+            max_retries=3,
         )
 
         results = await parser.run()

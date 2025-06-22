@@ -2,9 +2,10 @@ import logging
 import colorama
 import atexit
 
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
+from src.config.config import Config
 
 colorama.init()
 
@@ -14,8 +15,6 @@ class LogManager:
     Класс для управления логированием в приложении.
     Предоставляет единую точку доступа к логгерам и их конфигурации.
     """
-
-    DEFAULT_LOGS_FILE = "main.log"
 
     class ColoredFormatter(logging.Formatter):
         """
@@ -69,8 +68,8 @@ class LogManager:
 
     def __init__(
         self,
-        logs_dir: str = "logs",
-        log_filename: str = DEFAULT_LOGS_FILE,
+        logs_dir: Path | str = Config.LOGS_DIR,
+        log_filename: str = Config.DEFAULT_LOGS_FILE,
         max_bytes: int = 10 * 1024 * 1024,
         backup_count: int = 5,
         level: int = logging.INFO,
@@ -131,9 +130,7 @@ class LogManager:
         if cache_key in self._loggers:
             return self._loggers[cache_key]
 
-        self.log_file = (
-            self.logs_dir / (filename if filename else self.DEFAULT_LOGS_FILE)
-        ).resolve()
+        self.log_file = (self.logs_dir / filename) if filename else self.log_file
         logger = logging.getLogger(name)
         logger.propagate = False
         logger.handlers = []

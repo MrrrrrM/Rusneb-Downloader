@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from parse_request import ParseRequest
+from src.models.parse_request import ParseRequest
 
 
 @dataclass

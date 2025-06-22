@@ -1,6 +1,8 @@
 import argparse
 import sys
 
+from src.config.config import Config
+
 
 def parse_args() -> argparse.Namespace:
     """Парсинг аргументов командной строки для Rusneb парсера и загрузчика документов."""
@@ -25,20 +27,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--chunk-size",
         type=int,
-        default=10,
-        help="Размер чанка для обработки (по умолчанию: 10)",
+        default=Config.DEFAULT_PARSER_CHUNK_SIZE,
+        help=f"Размер чанка для обработки (по умолчанию: {Config.DEFAULT_PARSER_CHUNK_SIZE})",
     )
     parser.add_argument(
         "--parser-workers",
         type=int,
-        default=3,
-        help="Количество воркеров для парсинга каталога (по умолчанию: 3)",
+        default=Config.DEFAULT_PARSER_WORKERS,
+        help=f"Количество воркеров для парсинга каталога (по умолчанию: {Config.DEFAULT_PARSER_WORKERS})",
     )
     parser.add_argument(
         "--download-workers",
         type=int,
-        default=1,
-        help="Количество воркеров для загрузки файлов (по умолчанию: 1)",
+        default=Config.DEFAULT_DOWNLOADER_WORKERS,
+        help=f"Количество воркеров для загрузки файлов (по умолчанию: {Config.DEFAULT_DOWNLOADER_WORKERS})",
     )
     parser.add_argument(
         "--log-level",

@@ -1,13 +1,13 @@
-import asyncio
 import argparse
+import asyncio
 
 from parse_args import parse_args
-from catalog_parser import CatalogParser
-from client_manager import ClientManager
-from downloader import Downloader
-from page_data import PageData
-from parse_request import ParseRequest
-from log_manager import log_manager
+from src.models.parse_request import ParseRequest
+from src.models.page_data import PageData
+from src.client.client_manager import ClientManager
+from src.parsers.catalog_parser import CatalogParser
+from src.downloaders.downloader import Downloader
+from src.utils.log_manager import log_manager
 
 
 async def main() -> None:

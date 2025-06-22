@@ -2,11 +2,11 @@ import random
 import httpx
 import asyncio
 
-from pathlib import Path
-from client_manager import ClientManager
-from page_data import PageData
-from parse_request import ParseRequest
-from log_manager import log_manager
+from src.config.config import Config
+from src.models.parse_request import ParseRequest
+from src.models.page_data import PageData
+from src.client.client_manager import ClientManager
+from src.utils.log_manager import log_manager
 
 
 class Downloader:
@@ -19,8 +19,8 @@ class Downloader:
         request: ParseRequest,
         client_manager: ClientManager,
         page_data: PageData,
-        num_workers: int = 10,
-        max_retries: int = 3,
+        num_workers: int = Config.DEFAULT_DOWNLOADER_WORKERS,
+        max_retries: int = Config.DEFAULT_DOWNLOADER_RETRIES,
     ):
         """
         Инициализация класса Downloader.
@@ -41,9 +41,7 @@ class Downloader:
         self.stop_event = asyncio.Event()
         self.logger = log_manager.get_logger(__name__)
 
-        self.save_directory = (
-            Path(__file__).parent / "result" / request.query / "downloads"
-        )
+        self.save_directory = Config.RESULT_DIR / request.query / "downloads"
         self.save_directory.mkdir(parents=True, exist_ok=True)
 
     async def run(self) -> None:
