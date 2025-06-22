@@ -56,10 +56,12 @@ class Downloader:
             done, pending = await asyncio.wait(
                 workers, return_when=asyncio.FIRST_COMPLETED
             )
+
         except asyncio.CancelledError:
             self.logger.warning("Загрузка была отменена пользователем")
         except Exception as e:
             self.logger.exception(f"Вызвано исключение в воркерах: {e}", exc_info=True)
+
         finally:
             if not self.stop_event.is_set():
                 self.stop_event.set()
@@ -94,6 +96,7 @@ class Downloader:
                         if file_id in data.downloaded:
                             continue
                     success = await self._download_file(client, file_id)
+
                 except asyncio.CancelledError:
                     self.logger.warning(f"Воркер {worker_id} отменен")
                 except Exception as e:
@@ -101,6 +104,7 @@ class Downloader:
                         f"Ошибка в воркере {worker_id} для файла {file_id}: {e}",
                         exc_info=True,
                     )
+
                 finally:
                     if file_id:
                         async with self.page_data.protected_access() as data:
@@ -135,39 +139,42 @@ class Downloader:
                 f"Попытка {attempt}/{self.max_retries} загрузки файла {file_id}"
             )
             try:
-                response = await client.get(
-                    self.DOWNLOAD_URL,
-                    params=params,
-                )
-
-                if response.status_code != 200:
-                    self.logger.error(
-                        f"Ошибка загрузки файла {file_id}: статус {response.status_code}"
-                    )
-                    if attempt < self.max_retries:
-                        wait_time = 2**attempt
-                        self.logger.info(
-                            f"Повторная попытка {attempt} через {wait_time} сек..."
+                async with client.stream(
+                    "GET", self.DOWNLOAD_URL, params=params, timeout=120.0
+                ) as response:
+                    if response.status_code != 200:
+                        self.logger.warning(
+                            f"Ошибка загрузки файла {file_id}: статус {response.status_code}"
                         )
-                        await asyncio.sleep(wait_time)
-                    continue
+                        if attempt < self.max_retries:
+                            wait_time = 2**attempt
+                            self.logger.info(
+                                f"Повторная попытка {attempt} через {wait_time} сек..."
+                            )
+                            await asyncio.sleep(wait_time)
+                        continue
 
-                content_type = response.headers.get("Content-Type")
-                if content_type != "application/pdf":
-                    self.logger.error(
-                        f"Неверный тип содержимого для {file_id}: {content_type}, ожидается application/pdf"
+                    content_type = response.headers.get("Content-Type")
+                    if content_type != "application/pdf":
+                        self.logger.warning(
+                            f"Неверный тип содержимого для {file_id}: {content_type}, ожидается application/pdf"
+                        )
+                        return False
+
+                    filename = (
+                        response.headers.get("Content-Disposition", "")
+                        .split("filename=")[-1]
+                        .strip('"')
                     )
-                    return False
+                    filename = file_id if not filename else filename
 
-                filename = (
-                    response.headers.get("Content-Disposition")
-                    .split("filename=")[-1]
-                    .strip('"')
-                )
-                full_path = self.save_directory / f"{filename}.pdf"
-                with open(full_path, "wb") as f:
-                    f.write(response.content)
-                return True
+                    full_path = self.save_directory / f"{filename}.pdf"
+
+                    with open(full_path, "wb") as f:
+                        async for chunk in response.aiter_bytes(chunk_size=8192):
+                            f.write(chunk)
+
+                    return True
 
             except httpx.ReadError:
                 if attempt < self.max_retries:
@@ -212,7 +219,7 @@ async def test() -> None:
         request = ParseRequest("Петроградская газета 1911", is_search=True)
 
         client_manager = ClientManager(
-            timeout=30.0,  # proxy_file=Path(__file__).parent / "proxies.txt"
+            # proxy_file=Path(__file__).parent / "proxies.txt"
         )
         await client_manager.setup()
 
