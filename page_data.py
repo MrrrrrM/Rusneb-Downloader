@@ -83,6 +83,7 @@ class PageData:
                     f"Загружен прогресс: обработано {len(data.processed_pages)} страниц, "
                     f"в очереди {len(data.pending_tasks)} страниц для дообработки"
                 )
+
         except Exception as e:
             self.logger.exception(f"Ошибка при загрузке прогресса: {e}", exc_info=True)
 
@@ -109,6 +110,7 @@ class PageData:
                 f"    {len(data.download_queue)} документов в очереди на загрузку"
             )
             self.logger.info(f"    {len(data.downloaded)} загруженных документов")
+
         except Exception as e:
             self.logger.exception(
                 f"Ошибка при сохранении прогресса: {e}", exc_info=True

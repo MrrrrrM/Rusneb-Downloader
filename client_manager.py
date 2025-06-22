@@ -12,24 +12,26 @@ class ClientManager:
 
     def __init__(
         self,
-        timeout: float = 10.0,
+        proxy_file: Path | str | None = None,
+        timeout: httpx.Timeout = httpx.Timeout(
+            connect=10.0, read=60.0, write=10.0, pool=10.0
+        ),
         retries: int = 3,
         count_clients: int = 100,
-        proxy_file: Path | str | None = None,
     ):
         """
         Инициализация менеджера клиентов.
 
         Args:
-            timeout (float): Таймаут для HTTP-запросов.
-            retries (int): Количество попыток повторного запроса при ошибке.
-            count_clients (int): Количество клиентов для создания.
             proxy_file (Path | str | None): Путь к файлу с прокси-серверами.
+            timeout (httpx.Timeout): Таймаут для HTTP-запросов.
+            retries (int): Количество попыток повторного запроса при ошибке.
+            count_clients (int): Количество клиентов для создания если не указаны прокси.
         """
 
+        self.proxy_file = Path(proxy_file) if proxy_file else None
         self.timeout = timeout
         self.retries = retries
-        self.proxy_file = Path(proxy_file)
         self.count_clients = count_clients
 
         self.clients = []
@@ -74,7 +76,6 @@ class ClientManager:
 
         fake_useragent = FakeUserAgent()
         http_transport = httpx.AsyncHTTPTransport(retries=self.retries)
-        http_timeout = httpx.Timeout(self.timeout)
 
         if not self.proxy_file or not self.proxy_file.exists():
             self.logger.warning("Прокси файл не указан или не существует")
@@ -83,7 +84,6 @@ class ClientManager:
                 self._generate_client(
                     fake_useragent,
                     http_transport,
-                    http_timeout,
                 )
                 for _ in range(self.count_clients)
             ]
@@ -97,7 +97,6 @@ class ClientManager:
                 self._generate_client(
                     fake_useragent,
                     http_transport,
-                    http_timeout,
                 )
                 for _ in range(self.count_clients)
             ]
@@ -109,7 +108,6 @@ class ClientManager:
             self._generate_client(
                 fake_useragent,
                 http_transport,
-                http_timeout,
                 self.retries,
                 proxy,
             )
@@ -120,7 +118,6 @@ class ClientManager:
         self,
         fake_useragent: FakeUserAgent,
         http_transport: httpx.AsyncHTTPTransport,
-        http_timeout: httpx.Timeout,
         retries: int | None = None,
         proxy: httpx.Proxy | None = None,
     ) -> httpx.AsyncClient:
@@ -130,7 +127,6 @@ class ClientManager:
         Args:
             fake_useragent (FakeUserAgent): Экземпляр для генерации User-Agent.
             http_transport (httpx.AsyncHTTPTransport): Транспорт для HTTP-клиента.
-            http_timeout (httpx.Timeout): Таймаут для HTTP-запросов.
             retries (int | None): Количество попыток повторного запроса при ошибке.
             proxy (httpx.Proxy | None): Прокси-сервер для использования клиентом.
 
@@ -147,7 +143,7 @@ class ClientManager:
         return httpx.AsyncClient(
             headers={"User-Agent": fake_useragent.random},
             transport=transport,
-            timeout=http_timeout,
+            timeout=self.timeout,
         )
 
     async def _read_http_proxies(self) -> list[httpx.Proxy]:
@@ -158,9 +154,9 @@ class ClientManager:
             list[httpx.Proxy]: Список проверенных HTTP-прокси.
         """
 
-        http_proxies = []
         tasks = []
         proxies = []
+        working_proxies = []
 
         with self.proxy_file.open("r", encoding="utf-8") as f:
             for line in f:
@@ -176,10 +172,10 @@ class ClientManager:
         for proxy, is_working in zip(proxies, results):
             if is_working:
                 working_count += 1
-                http_proxies.append(proxy)
+                working_proxies.append(proxy)
 
         self.logger.info(f"Найдено рабочих прокси: {working_count} из {len(proxies)}")
-        return http_proxies
+        return working_proxies
 
     async def _check_http_proxy(
         self,
@@ -217,6 +213,18 @@ class ClientManager:
                     f"Прокси {proxy.url} вернул статус {response.status_code}"
                 )
                 return response.status_code == 200
+
+            except httpx.ProxyError:
+                self.logger.warning(f"Прокси {proxy.url} не доступен")
+                return False
+            except httpx.TimeoutException:
+                self.logger.warning(f"Прокси {proxy.url} истекло время ожидания")
+                return False
+            except httpx.RequestError as e:
+                self.logger.warning(
+                    f"Ошибка запроса через прокси {proxy.url}: {str(e)}"
+                )
+                return False
             except Exception as e:
                 self.logger.debug(f"Ошибка при проверке прокси {proxy.url}: {str(e)}")
                 return False

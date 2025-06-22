@@ -65,6 +65,7 @@ class CatalogParser:
             done, pending = await asyncio.wait(
                 workers, return_when=asyncio.ALL_COMPLETED
             )
+
         except asyncio.CancelledError:
             self.logger.warning("Парсинг отменен пользователем, завершаем работу...")
             async with self.page_data.protected_access() as data:
@@ -73,6 +74,7 @@ class CatalogParser:
             self.logger.exception(f"Ошибка при выполнении парсинга: {e}", exc_info=True)
             async with self.page_data.protected_access() as data:
                 data.has_error = True
+
         finally:
             if not self.stop_event.is_set():
                 self.stop_event.set()
@@ -317,7 +319,7 @@ async def test() -> None:
         request = ParseRequest("Петроградская газета 1911", is_search=True)
 
         client_manager = ClientManager(
-            timeout=30.0,  # proxy_file=Path(__file__).parent / "proxies.txt"
+            # proxy_file=Path(__file__).parent / "proxies.txt"
         )
         await client_manager.setup()
 

@@ -31,10 +31,8 @@ async def main() -> None:
             f"Запрос для обработки: {args.query}, режим поиска: {"да" if args.search else "нет"}"
         )
 
-        logger.info(
-            f"Настройка менеджера клиентов с таймаутом {args.timeout} секунд..."
-        )
-        client_manager = ClientManager(timeout=args.timeout, proxy_file=args.proxy_file)
+        logger.info(f"Настройка менеджера клиентов...")
+        client_manager = ClientManager(proxy_file=args.proxy_file)
         await client_manager.setup()
 
         logger.info(f"Загрузка прогресса...")
@@ -63,10 +61,12 @@ async def main() -> None:
         logger.info(f"Запуск задач парсинга и загрузки")
         tasks = [catalog_parser.run(), downloader.run()]
         await asyncio.gather(*tasks, return_exceptions=True)
+
     except asyncio.CancelledError:
         logger.warning("Операция отменена пользователем")
     except Exception as e:
         logger.exception(f"Вызвано исключение: {str(e)}", exc_info=True)
+
     finally:
         logger.info("Сохранение прогресса...")
         await page_data.save_progress()

@@ -23,12 +23,6 @@ def parse_args() -> argparse.Namespace:
         help="Путь к файлу, содержащему адреса прокси (по одному на строку)",
     )
     parser.add_argument(
-        "--timeout",
-        type=float,
-        default=30.0,
-        help="Таймаут для HTTP-запросов в секундах (по умолчанию: 30.0)",
-    )
-    parser.add_argument(
         "--chunk-size",
         type=int,
         default=10,
