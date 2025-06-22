@@ -20,6 +20,7 @@ class Downloader:
         client_manager: ClientManager,
         page_data: PageData,
         num_workers: int = 10,
+        max_retries: int = 3,
     ):
         """
         Инициализация класса Downloader.
@@ -35,6 +36,7 @@ class Downloader:
         self.client_manager = client_manager
         self.page_data = page_data
         self.num_workers = num_workers
+        self.max_retries = max_retries
 
         self.stop_event = asyncio.Event()
         self.logger = log_manager.get_logger(__name__)
@@ -114,7 +116,7 @@ class Downloader:
 
     async def _download_file(self, client: httpx.AsyncClient, file_id: str) -> bool:
         """
-        Загрузка файла по идентификатору.
+        Загрузка файла по идентификатору с механизмом повторных попыток.
 
         Args:
             client (httpx.AsyncClient): Асинхронный HTTP-клиент.
@@ -128,38 +130,80 @@ class Downloader:
 
         params = {"book_id": file_id, "doc_type": "pdf"}
 
-        try:
-            response = await client.get(self.DOWNLOAD_URL, params=params)
-        except Exception as e:
-            self.logger.exception(
-                f"Вызвано исключение для {file_id}: {e}", exc_info=True
+        for attempt in range(1, self.max_retries + 1):
+            self.logger.info(
+                f"Попытка {attempt}/{self.max_retries} загрузки файла {file_id}"
             )
-            return False
+            try:
+                response = await client.get(
+                    self.DOWNLOAD_URL,
+                    params=params,
+                )
 
-        if response.status_code != 200:
-            self.logger.error(
-                f"Ошибка загрузки файла {file_id}: статус {response.status_code}"
-            )
-            return False
+                if response.status_code != 200:
+                    self.logger.error(
+                        f"Ошибка загрузки файла {file_id}: статус {response.status_code}"
+                    )
+                    if attempt < self.max_retries:
+                        wait_time = 2**attempt
+                        self.logger.info(
+                            f"Повторная попытка {attempt} через {wait_time} сек..."
+                        )
+                        await asyncio.sleep(wait_time)
+                    continue
 
-        content_type = response.headers.get("Content-Type")
-        if content_type != "application/pdf":
-            self.logger.error(
-                f"Неверный тип содержимого для {file_id}: {content_type}, ожидается application/pdf"
-            )
-            return False
+                content_type = response.headers.get("Content-Type")
+                if content_type != "application/pdf":
+                    self.logger.error(
+                        f"Неверный тип содержимого для {file_id}: {content_type}, ожидается application/pdf"
+                    )
+                    return False
 
-        filename = (
-            response.headers.get("Content-Disposition")
-            .split("filename=")[-1]
-            .strip('"')
-        )
-        full_path = self.save_directory / f"{filename}.pdf"
+                filename = (
+                    response.headers.get("Content-Disposition")
+                    .split("filename=")[-1]
+                    .strip('"')
+                )
+                full_path = self.save_directory / f"{filename}.pdf"
+                with open(full_path, "wb") as f:
+                    f.write(response.content)
+                return True
 
-        with open(full_path, "wb") as f:
-            f.write(response.content)
+            except httpx.ReadError:
+                if attempt < self.max_retries:
+                    wait_time = 2**attempt
+                    self.logger.warning(
+                        f"Ошибка чтения при загрузке {file_id} (попытка {attempt}/{self.max_retries}). "
+                        f"Повторная попытка через {wait_time} сек..."
+                    )
+                    await asyncio.sleep(wait_time)
+                else:
+                    self.logger.error(
+                        f"Не удалось загрузить {file_id} после {self.max_retries} попыток"
+                    )
+            except httpx.TimeoutException:
+                if attempt < self.max_retries:
+                    wait_time = 2**attempt
+                    self.logger.warning(
+                        f"Тайм-аут при загрузке {file_id} (попытка {attempt}/{self.max_retries}). "
+                        f"Повторная попытка через {wait_time} сек..."
+                    )
+                    await asyncio.sleep(wait_time)
+                else:
+                    self.logger.error(
+                        f"Тайм-аут при загрузке {file_id} после {self.max_retries} попыток"
+                    )
+            except Exception as e:
+                self.logger.exception(
+                    f"Вызвано исключение для {file_id} (попытка {attempt}/{self.max_retries}): {e}",
+                    exc_info=True,
+                )
+                if attempt < self.max_retries:
+                    wait_time = 2**attempt
+                    self.logger.info(f"Повторная попытка через {wait_time} сек...")
+                    await asyncio.sleep(wait_time)
 
-        return True
+        return False
 
 
 async def test() -> None:
@@ -180,6 +224,7 @@ async def test() -> None:
             client_manager=client_manager,
             page_data=page_data,
             num_workers=1,
+            max_retries=3,
         )
         await downloader.run()
     finally:
