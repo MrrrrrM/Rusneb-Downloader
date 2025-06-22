@@ -5,6 +5,7 @@ from pathlib import Path
 from fake_useragent import FakeUserAgent
 from tqdm.asyncio import tqdm_asyncio as tqdm
 
+from src.config.config import Config
 from src.utils.log_manager import log_manager
 
 
@@ -30,7 +31,7 @@ class ClientManager:
             count_clients (int): Количество клиентов для создания если не указаны прокси.
         """
 
-        self.proxy_file = Path(proxy_file) if proxy_file else None
+        self.proxy_file = Config.BASE_DIR / proxy_file if proxy_file else None
         self.timeout = timeout
         self.retries = retries
         self.count_clients = count_clients
