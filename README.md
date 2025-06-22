@@ -41,10 +41,14 @@ options:
 
 ```bash
 python -u ./main.py --query 000200_000018_RU_NLR_DRGNLR_3107
+```
 
+```bash
 python -u ./main.py --query "Петроградская газета 1911" --search
 ```
 
 Для остановки скрипта используйте `CTRL+C`.
+
+Файл с прокси должен находится в корневой директории (рядом с `main.py`)
 
 Конфигурация находится в `src/config/config.py`
