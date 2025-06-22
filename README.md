@@ -15,8 +15,8 @@ python -u ./main.py --help
 Аргументы командной строки
 
 ```bash
-usage: main.py [-h] --query QUERY [--search] [--proxy-file PROXY_FILE] [--timeout TIMEOUT]
-[--chunk-size CHUNK_SIZE] [--parser-workers PARSER_WORKERS] [--download-workers DOWNLOAD_WORKERS]
+usage: main.py [-h] --query QUERY [--search] [--proxy-file PROXY_FILE] [--chunk-size CHUNK_SIZE]
+[--parser-workers PARSER_WORKERS] [--download-workers DOWNLOAD_WORKERS]
 [--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
 
 Rusneb парсер и загрузчик документов
@@ -27,7 +27,6 @@ options:
   --search              Используйте этот флаг, если запрос является поисковым термином, а не идентификатором каталога
   --proxy-file PROXY_FILE
                         Путь к файлу, содержащему адреса прокси (по одному на строку)
-  --timeout TIMEOUT     Таймаут для HTTP-запросов в секундах (по умолчанию: 30.0)
   --chunk-size CHUNK_SIZE
                         Размер чанка для обработки (по умолчанию: 10)
   --parser-workers PARSER_WORKERS
