@@ -9,9 +9,12 @@ from client_manager import ClientManager
 from page_task import PageTask
 from page_data import PageData
 from parse_request import ParseRequest
+from log_manager import log_manager
 
 
 class CatalogParser:
+    """Парсер для обработки страниц каталога на сайте Rusneb."""
+
     def __init__(
         self,
         request: ParseRequest,
@@ -21,6 +24,18 @@ class CatalogParser:
         chunk_size: int = 10,
         max_retries: int = 3,
     ):
+        """
+        Инициализация парсера каталога.
+
+        Args:
+            request (ParseRequest): Запрос на парсинг.
+            client_manager (ClientManager): Менеджер HTTP-клиентов.
+            page_data (PageData): Данные о страницах.
+            num_workers (int): Количество воркеров.
+            chunk_size (int): Размер чанка.
+            max_retries (int): Максимальное количество попыток.
+        """
+
         self.request = request
         self.client_manager = client_manager
         self.num_workers = num_workers
@@ -31,12 +46,15 @@ class CatalogParser:
         self.next_page = 0
         self.lock = asyncio.Lock()
         self.stop_event = asyncio.Event()
+        self.logger = log_manager.get_logger(__name__)
         self.start_time = time.time_ns()
 
     async def run(self) -> None:
+        """Запуск процесса парсинга каталога."""
+
         self.start_time = time.time_ns()
 
-        print(
+        self.logger.info(
             f"Запуск парсинга каталога {self.request.query} с {self.num_workers} воркерами"
         )
 
@@ -48,18 +66,17 @@ class CatalogParser:
                 workers, return_when=asyncio.ALL_COMPLETED
             )
         except asyncio.CancelledError:
-            print("Парсинг отменен пользователем, завершаем работу...")
+            self.logger.warning("Парсинг отменен пользователем, завершаем работу...")
             async with self.page_data.protected_access() as data:
                 data.has_error = True
         except Exception as e:
-            print(f"Ошибка при выполнении парсинга: {e} ❌")
+            self.logger.exception(f"Ошибка при выполнении парсинга: {e}", exc_info=True)
             async with self.page_data.protected_access() as data:
                 data.has_error = True
         finally:
             if not self.stop_event.is_set():
                 self.stop_event.set()
-                print("Ожидание завершения всех воркеров...")
-
+                self.logger.info("Ожидание завершения всех воркеров...")
             for worker in pending:
                 if not worker.done():
                     worker.cancel()
@@ -67,13 +84,22 @@ class CatalogParser:
             await asyncio.gather(*pending, return_exceptions=True)
 
             total_time = time.time_ns() - self.start_time
-            print(f"Парсинг завершен за {total_time / 1_000_000_000:.2f} секунд ✅")
+            self.logger.info(
+                f"Парсинг завершен за {total_time / 1_000_000_000:.2f} секунд"
+            )
 
             async with self.page_data.protected_access() as data:
-                print(f"Обработано страниц: {len(data.processed_pages)}")
+                self.logger.info(f"Обработано страниц: {len(data.processed_pages)}")
 
     async def worker(self, worker_id: int) -> None:
-        print(f"Запущен воркер {worker_id}")
+        """
+        Воркеры для параллельной обработки страниц каталога.
+
+        Args:
+            worker_id (int): Идентификатор воркера.
+        """
+
+        self.logger.info(f"Запущен воркер {worker_id} для обработки страниц каталога")
 
         client = await self.client_manager.pop_client()
 
@@ -83,8 +109,8 @@ class CatalogParser:
                 if not tasks:
                     async with self.page_data.protected_access() as data:
                         if data.no_more_pages and not data.pending_tasks:
-                            print(
-                                f"Воркер {worker_id} завершается: задачи закончились ⚠️"
+                            self.logger.warning(
+                                f"Воркер {worker_id} завершается: задачи закончились"
                             )
                             break
                         else:
@@ -100,6 +126,16 @@ class CatalogParser:
                     await asyncio.sleep(random.uniform(0.5, 2.0))
 
     async def _get_next_tasks(self, worker_id: int, count: int) -> list[PageTask]:
+        """
+        Получение следующего набора задач для воркера.
+        Args:
+            worker_id (int): Идентификатор воркера.
+            count (int): Количество задач для получения.
+
+            Returns:
+                list[PageTask]: Список задач для обработки.
+        """
+
         tasks = []
 
         async with self.page_data.protected_access() as data:
@@ -127,6 +163,14 @@ class CatalogParser:
         return tasks
 
     async def _process_page(self, task: PageTask, client: httpx.AsyncClient) -> None:
+        """
+        Обработка страницы каталога.
+
+        Args:
+            task (PageTask): Задача на обработку страницы.
+            client (httpx.AsyncClient): HTTP-клиент для выполнения запросов.
+        """
+
         async with self.page_data.protected_access() as data:
             if task.page_number in data.processed_pages:
                 task.processed = True
@@ -138,15 +182,15 @@ class CatalogParser:
                 else f"https://rusneb.ru/catalog/{task.request.query}/?volumes=page-{task.page_number}"
             )
 
-        print(
+        self.logger.info(
             f"Воркер {task.worker_id} обрабатывает страницу {task.page_number}: {url}"
         )
 
         try:
             response = await client.get(url)
             if response.status_code != 200:
-                print(
-                    f"Ошибка при запросе страницы {task.page_number}: статус {response.status_code} ⚠️"
+                self.logger.warning(
+                    f"Ошибка при запросе страницы {task.page_number}: статус {response.status_code}"
                 )
                 task.attempt_count += 1
                 task.last_error = Exception(f"HTTP error {response.status_code}")
@@ -154,11 +198,31 @@ class CatalogParser:
                     async with self.page_data.protected_access() as data:
                         data.pending_tasks.append(task)
                 return
+
+        except httpx.ReadError:
+            self.logger.warning(f"Ошибка чтения ответа для страницы {task.page_number}")
+            task.attempt_count += 1
+            task.last_error = Exception("Read error")
+            if task.attempt_count < self.max_retries:
+                async with self.page_data.protected_access() as data:
+                    data.pending_tasks.append(task)
+            return
+        except httpx.TimeoutException:
+            self.logger.warning(f"Таймаут при запросе страницы {task.page_number}")
+            task.attempt_count += 1
+            task.last_error = Exception("Timeout")
+            if task.attempt_count < self.max_retries:
+                async with self.page_data.protected_access() as data:
+                    data.pending_tasks.append(task)
+            return
         except Exception as e:
             if not e:
-                print(f"Таймаут при запросе страницы {task.page_number} ⚠️")
+                self.logger.warning(f"Таймаут при запросе страницы {task.page_number}")
                 return
-            print(f"Исключение при обработке страницы {task.page_number}: {e} ❌")
+            self.logger.exception(
+                f"Исключение при обработке страницы {task.page_number}: {e}",
+                exc_info=True,
+            )
             task.attempt_count += 1
             task.last_error = e
             if task.attempt_count < self.max_retries:
@@ -173,12 +237,12 @@ class CatalogParser:
             else self._parse_catalog_page(html_content)
         )
         if not items:
-            print(f"Страница {task.page_number}: не найдено элементов ⚠️")
+            self.logger.warning(f"Страница {task.page_number}: не найдено элементов")
             async with self.page_data.protected_access() as data:
                 if task.page_number > data.max_page_found:
                     data.no_more_pages = True
-                    print(
-                        f"Похоже, достигнут конец каталога на странице {task.page_number-1} ⚠️"
+                    self.logger.warning(
+                        f"Похоже, достигнут конец каталога на странице {task.page_number-1}"
                     )
             task.no_more_pages = True
             return
@@ -196,12 +260,22 @@ class CatalogParser:
             data.processed_pages.add(task.page_number)
 
         task.processed = True
-        print(
-            f"Страница {task.page_number}: найдено {len(items)} элементов, {len(new_items)} новых ✅"
+        self.logger.info(
+            f"Страница {task.page_number}: найдено {len(items)} элементов, {len(new_items)} новых"
         )
 
     @staticmethod
     def _parse_catalog_page(html_content: str) -> list[str]:
+        """
+        Парсинг страницы каталога.
+
+        Args:
+            html_content (str): HTML-контент страницы каталога.
+
+        Returns:
+            list[str]: Список идентификаторов элементов на странице.
+        """
+
         soup = BeautifulSoup(html_content, "html.parser")
         items = []
         for card in soup.select(".cards-results__item"):
@@ -215,6 +289,16 @@ class CatalogParser:
 
     @staticmethod
     def _parse_search_page(html_content: str) -> list[str]:
+        """
+        Парсинг страницы результатов поиска.
+
+        Args:
+            html_content (str): HTML-контент страницы результатов поиска.
+
+        Returns:
+            list[str]: Список идентификаторов элементов на странице.
+        """
+
         soup = BeautifulSoup(html_content, "html.parser")
         items = []
         for card in soup.select(".search-list__item"):
